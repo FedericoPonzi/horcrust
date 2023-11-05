@@ -1,0 +1,40 @@
+syntax = "proto3";
+package messages;
+
+message HorcrustMsgMessage {
+  oneof message_type {
+    HorcrustMsgRequest request = 1;
+    HorcrustMsgResponse response = 2;
+  }
+}
+message HorcrustMsgRequest {
+  oneof request {
+    PutSecretRequest status_request = 1;
+    GetSecretRequest change_request = 2;
+  }
+}
+message HorcrustMsgResponse {
+  oneof response {
+    HorcrustMsgError error = 1;
+    SecretResponse secret_response = 2;
+  }
+}
+
+message HorcrustMsgError {
+    bool error = 1;
+    string error_string = 2;
+}
+message PutSecretRequest {
+  uint32 key = 1;
+  uint32 secret = 2;
+}
+message GetSecretRequest {
+  uint32 key = 1;
+}
+message RefreshSecretRequest {
+  uint32 refresh = 1;
+}
+
+message SecretResponse {
+  uint32 secret = 1;
+}

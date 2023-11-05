@@ -1,0 +1,6 @@
+/target
+/Cargo.lock
+key.pem
+cert.pem
+.idea
+specs.md
