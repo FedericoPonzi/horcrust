@@ -9,32 +9,34 @@ message HorcrustMsgMessage {
 }
 message HorcrustMsgRequest {
   oneof request {
-    PutSecretRequest status_request = 1;
-    GetSecretRequest change_request = 2;
+    PutShareRequest put_share = 1;
+    GetShareRequest get_share = 2;
+    RefreshShareRequest refresh = 3;
   }
 }
 message HorcrustMsgResponse {
   oneof response {
     HorcrustMsgError error = 1;
-    SecretResponse secret_response = 2;
+    ShareResponse share_response = 2;
   }
 }
 
 message HorcrustMsgError {
-    bool error = 1;
-    string error_string = 2;
+  bool error = 1;
+  string error_string = 2;
 }
-message PutSecretRequest {
+message PutShareRequest {
   uint32 key = 1;
-  uint32 secret = 2;
+  uint64 share = 2;
 }
-message GetSecretRequest {
+message GetShareRequest {
   uint32 key = 1;
 }
-message RefreshSecretRequest {
-  uint32 refresh = 1;
+message RefreshShareRequest {
+  uint32 key = 1;
+  uint64 random = 2;
 }
 
-message SecretResponse {
-  uint32 secret = 1;
+message ShareResponse {
+  uint64 share = 1;
 }

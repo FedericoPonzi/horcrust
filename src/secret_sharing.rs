@@ -1,10 +1,11 @@
+use crate::{HorcrustSecret, HorcrustShare};
 use rand::Rng;
 
 pub trait SecretSharing {
-    fn split(&self, shares: usize, secret: u64) -> Vec<u64>;
-    fn combine(&self, shares: Vec<u64>) -> u64;
+    fn split(&self, shares: usize, secret: HorcrustSecret) -> Vec<HorcrustShare>;
+    fn combine(&self, shares: Vec<HorcrustShare>) -> HorcrustSecret;
     // Used by the server side to refresh the secret.
-    fn refresh_shares(&self, r: u64, secret: u64) -> u64;
+    fn refresh_shares(&self, r: HorcrustShare, share: HorcrustShare) -> HorcrustShare;
 }
 
 /// This simple implementation assumes that the original secret is always less than q.
@@ -13,36 +14,36 @@ pub struct AdditiveSecretSharing {
     q: u64,
 }
 impl AdditiveSecretSharing {
-    fn new() -> AdditiveSecretSharing {
+    pub fn new() -> AdditiveSecretSharing {
         AdditiveSecretSharing { q: Q }
     }
 }
 
 impl SecretSharing for AdditiveSecretSharing {
-    fn split(&self, shares: usize, secret: u64) -> Vec<u64> {
+    fn split(&self, shares: usize, secret: HorcrustSecret) -> Vec<HorcrustShare> {
         let mut rng = rand::thread_rng();
         let mut ret = vec![];
 
         // Generate random shares
         for _ in 0..shares - 1 {
             let share = rng.gen_range(0..self.q);
-            ret.push(share);
+            ret.push(share as HorcrustShare);
         }
 
         // Calculate the last share to make the sum equal to the secret
         let first = secret as i64 - ret.iter().sum::<u64>() as i64;
-        ret.push(first.rem_euclid(self.q as i64) as u64);
-        ret
+        ret.push(first.rem_euclid(self.q as i64) as HorcrustShare);
+        ret.into()
     }
-    fn combine(&self, shares: Vec<u64>) -> u64 {
+    fn combine(&self, shares: Vec<HorcrustShare>) -> HorcrustSecret {
         // returns sum(shares) % Q
         shares
             .iter()
             .fold(0, |acc, &share| (acc + share).rem_euclid(self.q))
     }
 
-    fn refresh_shares(&self, r: u64, secret: u64) -> u64 {
-        (r + secret).rem_euclid(self.q)
+    fn refresh_shares(&self, r: HorcrustShare, share: HorcrustShare) -> HorcrustShare {
+        (r + share).rem_euclid(self.q)
     }
 }
 

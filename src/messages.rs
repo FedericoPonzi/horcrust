@@ -18,7 +18,7 @@ pub mod horcrust_msg_message {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct HorcrustMsgRequest {
-    #[prost(oneof = "horcrust_msg_request::Request", tags = "1, 2")]
+    #[prost(oneof = "horcrust_msg_request::Request", tags = "1, 2, 3")]
     pub request: ::core::option::Option<horcrust_msg_request::Request>,
 }
 /// Nested message and enum types in `HorcrustMsgRequest`.
@@ -27,9 +27,11 @@ pub mod horcrust_msg_request {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Request {
         #[prost(message, tag = "1")]
-        StatusRequest(super::PutSecretRequest),
+        PutShare(super::PutShareRequest),
         #[prost(message, tag = "2")]
-        ChangeRequest(super::GetSecretRequest),
+        GetShare(super::GetShareRequest),
+        #[prost(message, tag = "3")]
+        Refresh(super::RefreshShareRequest),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -46,7 +48,7 @@ pub mod horcrust_msg_response {
         #[prost(message, tag = "1")]
         Error(super::HorcrustMsgError),
         #[prost(message, tag = "2")]
-        SecretResponse(super::SecretResponse),
+        ShareResponse(super::ShareResponse),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -59,27 +61,29 @@ pub struct HorcrustMsgError {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PutSecretRequest {
+pub struct PutShareRequest {
     #[prost(uint32, tag = "1")]
     pub key: u32,
-    #[prost(uint32, tag = "2")]
-    pub secret: u32,
+    #[prost(uint64, tag = "2")]
+    pub share: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct GetSecretRequest {
+pub struct GetShareRequest {
     #[prost(uint32, tag = "1")]
     pub key: u32,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RefreshSecretRequest {
+pub struct RefreshShareRequest {
     #[prost(uint32, tag = "1")]
-    pub refresh: u32,
+    pub key: u32,
+    #[prost(uint64, tag = "2")]
+    pub random: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SecretResponse {
-    #[prost(uint32, tag = "1")]
-    pub secret: u32,
+pub struct ShareResponse {
+    #[prost(uint64, tag = "1")]
+    pub share: u64,
 }
