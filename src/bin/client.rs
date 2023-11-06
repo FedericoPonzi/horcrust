@@ -36,7 +36,7 @@ fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
 
     let cli = CliArgs::parse();
-    if cli.servers.len() < 1 {
+    if cli.servers.len() < 2 {
         panic!("Please provide at least 2 servers");
     }
     info!("Hello!");
@@ -58,6 +58,16 @@ fn main() {
             println!("Recovered secret: {}", secret);
         }
         Command::StoreSecret { key, secret } => {
+            if additive_sharing
+                .limit()
+                .map(|l| l > secret)
+                .unwrap_or(false)
+            {
+                panic!(
+                    "Secret is too big. It should be less than {:?}",
+                    additive_sharing.limit()
+                );
+            }
             info!(
                 "Storing secret {secret} with key '{key}' to servers: {:?}",
                 cli.servers
@@ -120,7 +130,7 @@ fn put_share(key: HorcrustStoreKey, share: HorcrustShare, server: String) -> Res
                 println!("Share stored successfully on server: {}", server);
             }
         }
-        resp @ _ => {
+        resp => {
             panic!("Unexpected response from server '{}': {:?} ", server, resp);
         }
     }

@@ -1,12 +1,16 @@
 use std::net::TcpListener;
+use std::sync::{Arc, Mutex};
 
 use clap::Parser;
 use env_logger::Env;
 use log::{debug, info};
+use rand::random;
 
 use horcrust::{
-    horcrust_msg_request, msg_share_response, msg_success_response, AdditiveSecretSharing,
-    ConnectionHandler, HorcrustMsgRequest, Result, TcpConnectionHandler,
+    horcrust_msg_request, horcrust_msg_response, msg_error_response, msg_refresh_share_request,
+    msg_retrieve_secret_request, msg_share_response, msg_success_response, AdditiveSecretSharing,
+    ConnectionHandler, HorcrustMsgError, HorcrustMsgRequest, HorcrustMsgResponse, Result,
+    TcpConnectionHandler,
 };
 use horcrust::{SecretSharing, SharesDatabase};
 
@@ -30,17 +34,18 @@ fn main() {
     let cli = CliArgs::parse();
     if cli.servers.len() < 2 {
         //TODO panic
-        println!("Please provide at least 2 servers");
+        println!("Please provide at least 2 servers. Include this server's address as well.");
     }
+    debug!("Server: {server}", cli.servers);
     run(cli.port, cli.servers).unwrap();
 }
 fn run(port: u16, servers: Vec<String>) -> Result<()> {
     // listen on port port
     let listener = TcpListener::bind(("0000000", port)).unwrap();
     info!("Listening on port {}", port);
-    let mut db = SharesDatabase::new();
-    db.insert(123u32, 321u64);
-    let secret_sharing = AdditiveSecretSharing::new();
+    let db = Arc::new(Mutex::new(SharesDatabase::new()));
+    let secret_sharing = SecretSharingScheme::new();
+    spawn_refresher(servers, db.clone());
     for stream in listener.incoming() {
         let mut connection = TcpConnectionHandler::new(stream?);
         let received: HorcrustMsgRequest = connection.receive()?;
@@ -48,30 +53,84 @@ fn run(port: u16, servers: Vec<String>) -> Result<()> {
         match received.request.unwrap() {
             horcrust_msg_request::Request::PutShare(put_share) => {
                 info!("Received put share request: {:?}", put_share);
-                if db.get(put_share.key).is_some() {
-                    // TODO: send error back
-                }
-                db.insert(put_share.key, put_share.share);
+                // this overwrites whatever was there before
+                let mut db_lock = db.lock().unwrap();
+                db_lock.insert(put_share.key, put_share.share);
                 let response = msg_success_response();
                 connection.send(response)?;
             }
             horcrust_msg_request::Request::GetShare(get_share) => {
                 info!("Received get share request: {:?}", get_share);
-                let share = db.get(get_share.key);
+                let db_lock = db.lock().unwrap();
+                let share = db_lock.get(get_share.key);
                 if share.is_none() {
-                    // TODO: send error back
+                    let response =
+                        msg_error_response("Key not found. Use store-key to store a key first.");
+                    connection.send(response)?;
+                } else {
+                    let share = share.unwrap();
+                    let response = msg_share_response(share);
+                    connection.send(response)?;
                 }
-                let share = share.unwrap();
-                let response = msg_share_response(share);
-                connection.send(response)?;
             }
             horcrust_msg_request::Request::Refresh(refresh) => {
                 info!("Received refresh request: {:?}", refresh);
                 let r = refresh.random;
-                db.modify(refresh.key, |v| secret_sharing.refresh_shares(r, v));
-                // TODO
+                let mut db_lock = db.lock().unwrap();
+                for key in refresh.key {
+                    db_lock.modify(key, |v| secret_sharing.refresh_share(r, v));
+                }
+                let response = msg_success_response();
+                connection.send(response)?;
             }
         }
     }
     unreachable!();
+}
+
+pub fn spawn_refresher(servers: Vec<String>, db: Arc<Mutex<SharesDatabase>>) {
+    std::thread::spawn(move || refresher(servers, db));
+}
+pub fn refresher(servers: Vec<String>, db: Arc<Mutex<SharesDatabase>>) -> Result<()> {
+    info!("Spawned refresher thread.");
+    loop {
+        // wait at least 2 seconds + between 1 and 10 seconds
+        let time_to_wait = 2 + (random::<f32>() * 10.0) as u64;
+        debug!("Waiting for {} seconds", time_to_wait);
+        std::thread::sleep(std::time::Duration::from_secs(time_to_wait));
+        debug!("Starting refreshing");
+        let refreshers = AdditiveSecretSharing::new().generate_refreshers(servers.len());
+        debug!("Refreshers: {:?}", refreshers);
+        let db_lock = db.lock().unwrap();
+        let stale_keys = db_lock.stale_keys();
+        drop(db_lock);
+        // all good
+        if stale_keys.is_empty() {
+            debug!("No stale keys to refresh.");
+            continue;
+        }
+        for (server, r) in servers.iter().zip(refreshers) {
+            let socket = std::net::TcpStream::connect(&server).unwrap();
+            let mut handler = TcpConnectionHandler::new(socket);
+            let request = msg_refresh_share_request(stale_keys.clone(), r);
+            handler.send(request)?;
+            let response: HorcrustMsgResponse = handler.receive()?;
+            match response.response.unwrap() {
+                horcrust_msg_response::Response::Error(HorcrustMsgError {
+                    error,
+                    error_string,
+                }) => {
+                    if error {
+                        info!(
+                            "Failed to refresh shares on server {}, error: {}",
+                            server, error_string
+                        );
+                    }
+                }
+                _ => {
+                    info!("Unknown response from server {}", server);
+                }
+            }
+        }
+    }
 }

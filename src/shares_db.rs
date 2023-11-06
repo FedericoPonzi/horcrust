@@ -1,18 +1,36 @@
 use crate::{HorcrustShare, HorcrustStoreKey};
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
+const REFRESH_THRESHOLD: Duration = Duration::from_millis(5000);
+
+#[derive(Default)]
 pub struct SharesDatabase {
     shares: HashMap<HorcrustStoreKey, HorcrustShare>,
+    shares_refresh: HashMap<HorcrustStoreKey, Instant>,
 }
 
 impl SharesDatabase {
     pub fn new() -> Self {
         Self {
             shares: HashMap::new(),
+            shares_refresh: HashMap::new(),
         }
     }
-    pub fn insert<T: Into<HorcrustStoreKey>, S: Into<HorcrustShare>>(&mut self, key: T, share: S) {
+    pub fn stale_keys(&self) -> Vec<HorcrustStoreKey> {
+        self.shares_refresh
+            .iter()
+            .filter(|(_, t)| t.elapsed() > REFRESH_THRESHOLD)
+            .map(|(k, _)| *k)
+            .collect()
+    }
+    pub fn insert<T: Into<HorcrustStoreKey> + Copy, S: Into<HorcrustShare>>(
+        &mut self,
+        key: T,
+        share: S,
+    ) {
         self.shares.insert(key.into(), share.into());
+        self.shares_refresh.insert(key.into(), Instant::now());
     }
     pub fn get<T: Into<HorcrustStoreKey>>(&self, key: T) -> Option<HorcrustShare> {
         // just to keep things easy, this get returns a copy of the value. Usually it should return a reference to it.

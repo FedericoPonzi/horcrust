@@ -33,7 +33,7 @@ message GetShareRequest {
   uint32 key = 1;
 }
 message RefreshShareRequest {
-  uint32 key = 1;
+  repeated uint32 key = 1;
   uint64 random = 2;
 }
 

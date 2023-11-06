@@ -76,8 +76,8 @@ pub struct GetShareRequest {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RefreshShareRequest {
-    #[prost(uint32, tag = "1")]
-    pub key: u32,
+    #[prost(uint32, repeated, tag = "1")]
+    pub key: ::prost::alloc::vec::Vec<u32>,
     #[prost(uint64, tag = "2")]
     pub random: u64,
 }
