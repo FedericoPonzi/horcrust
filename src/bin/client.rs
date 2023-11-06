@@ -58,16 +58,6 @@ fn main() {
             println!("Recovered secret: {}", secret);
         }
         Command::StoreSecret { key, secret } => {
-            if additive_sharing
-                .limit()
-                .map(|l| l > secret)
-                .unwrap_or(false)
-            {
-                panic!(
-                    "Secret is too big. It should be less than {:?}",
-                    additive_sharing.limit()
-                );
-            }
             info!(
                 "Storing secret {secret} with key '{key}' to servers: {:?}",
                 cli.servers

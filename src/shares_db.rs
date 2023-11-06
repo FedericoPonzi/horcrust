@@ -36,7 +36,7 @@ impl SharesDatabase {
         // just to keep things easy, this get returns a copy of the value. Usually it should return a reference to it.
         self.shares.get(&key.into()).cloned()
     }
-    pub fn modify<F, K: Into<HorcrustStoreKey>>(&mut self, key: K, f: F)
+    pub fn modify<F, K: Into<HorcrustStoreKey> + Copy>(&mut self, key: K, f: F)
     where
         F: Fn(HorcrustShare) -> HorcrustShare,
     {
@@ -46,6 +46,7 @@ impl SharesDatabase {
         }
         let share = share.unwrap();
         *share = f(*share);
+        *self.shares_refresh.get_mut(&key.into()).unwrap() = Instant::now();
     }
 }
 

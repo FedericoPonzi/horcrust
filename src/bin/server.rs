@@ -8,9 +8,8 @@ use rand::random;
 
 use horcrust::{
     horcrust_msg_request, horcrust_msg_response, msg_error_response, msg_refresh_share_request,
-    msg_retrieve_secret_request, msg_share_response, msg_success_response, AdditiveSecretSharing,
-    ConnectionHandler, HorcrustMsgError, HorcrustMsgRequest, HorcrustMsgResponse, Result,
-    TcpConnectionHandler,
+    msg_share_response, msg_success_response, AdditiveSecretSharing, ConnectionHandler,
+    HorcrustMsgError, HorcrustMsgRequest, HorcrustMsgResponse, Result, TcpConnectionHandler,
 };
 use horcrust::{SecretSharing, SharesDatabase};
 
@@ -36,7 +35,7 @@ fn main() {
         //TODO panic
         println!("Please provide at least 2 servers. Include this server's address as well.");
     }
-    debug!("Server: {server}", cli.servers);
+    debug!("cli: {:?}", cli);
     run(cli.port, cli.servers).unwrap();
 }
 fn run(port: u16, servers: Vec<String>) -> Result<()> {
@@ -44,7 +43,7 @@ fn run(port: u16, servers: Vec<String>) -> Result<()> {
     let listener = TcpListener::bind(("0000000", port)).unwrap();
     info!("Listening on port {}", port);
     let db = Arc::new(Mutex::new(SharesDatabase::new()));
-    let secret_sharing = SecretSharingScheme::new();
+    let secret_sharing = AdditiveSecretSharing::new();
     spawn_refresher(servers, db.clone());
     for stream in listener.incoming() {
         let mut connection = TcpConnectionHandler::new(stream?);
@@ -100,7 +99,6 @@ pub fn refresher(servers: Vec<String>, db: Arc<Mutex<SharesDatabase>>) -> Result
         std::thread::sleep(std::time::Duration::from_secs(time_to_wait));
         debug!("Starting refreshing");
         let refreshers = AdditiveSecretSharing::new().generate_refreshers(servers.len());
-        debug!("Refreshers: {:?}", refreshers);
         let db_lock = db.lock().unwrap();
         let stale_keys = db_lock.stale_keys();
         drop(db_lock);

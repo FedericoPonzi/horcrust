@@ -24,6 +24,3 @@ pub type HorcrustStoreKey = u32;
 pub type HorcrustShare = u64;
 /// our own result type, TODO: implement using thiserror.
 pub type Result<T> = anyhow::Result<T>;
-
-// this can be used to quickly change the secret sharing scheme in the whole project.
-pub type SecretSharingScheme = AdditiveSecretSharing;
