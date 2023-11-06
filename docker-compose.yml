@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  server1:
+    build: .
+    ports:
+      - "8001:8000"
+    environment:
+      - "SERVER_ENV=instance1"
+    networks:
+      - server-network
+
+  server2:
+    build: .
+    ports:
+      - "8002:8000"
+    environment:
+      - "SERVER_ENV=instance2"
+    networks:
+      - server-network
+
+networks:
+  server-network:
+    driver: bridge

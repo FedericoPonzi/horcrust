@@ -87,3 +87,11 @@ pub struct ShareResponse {
     #[prost(uint64, tag = "1")]
     pub share: u64,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RawMessage {
+    #[prost(bytes = "vec", tag = "1")]
+    pub nonce: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "2")]
+    pub encrypted_payload: ::prost::alloc::vec::Vec<u8>,
+}

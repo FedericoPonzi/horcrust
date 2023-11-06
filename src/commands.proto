@@ -40,3 +40,8 @@ message RefreshShareRequest {
 message ShareResponse {
   uint64 share = 1;
 }
+
+message RawMessage {
+  bytes nonce = 1;
+  bytes encrypted_payload = 2;
+}

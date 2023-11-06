@@ -1,4 +1,4 @@
-use crate::{HorcrustSecret, HorcrustShare, HorcrustStoreKey};
+use crate::{HorcrustShare, HorcrustStoreKey};
 use std::collections::HashMap;
 
 pub struct SharesDatabase {
