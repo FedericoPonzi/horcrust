@@ -1,8 +1,7 @@
 mod secret_sharing;
 
-use anyhow::Context;
-use prost::Message;
-use std::io::{Read, Write};
+use std::io::Write;
+use std::time::Duration;
 
 mod connection;
 mod messages;
@@ -24,3 +23,6 @@ pub type HorcrustStoreKey = u32;
 pub type HorcrustShare = u64;
 /// our own result type, TODO: implement using thiserror.
 pub type Result<T> = anyhow::Result<T>;
+
+/// Amount of time after which a key is considered stale and a candidate for refreshing.
+const REFRESH_THRESHOLD: Duration = Duration::from_millis(5000);

@@ -23,7 +23,7 @@ impl TcpConnectionHandler {
         // TODO super secret key
         let key: &[u8; 32] = &[42; 32];
         let key: &Key<Aes256Gcm> = key.into();
-        let cipher = Aes256Gcm::new(&key);
+        let cipher = Aes256Gcm::new(key);
 
         Self { socket, cipher }
     }
@@ -43,15 +43,14 @@ impl ConnectionHandler<HorcrustMsgRequest, HorcrustMsgResponse> for TcpConnectio
             encrypted_payload,
         };
         message.encode(&mut buf).unwrap();
-        self.socket.write_all(&buf).unwrap();
+        self.socket.write_all(&buf)?;
         self.socket.shutdown(Shutdown::Write)?;
         Ok(())
     }
 
     fn receive(&mut self) -> Result<HorcrustMsgResponse> {
         let mut buf = Vec::new();
-        self.socket.read_to_end(&mut buf).unwrap();
-        self.socket.shutdown(Shutdown::Read);
+        self.socket.read_to_end(&mut buf)?;
         let buf = decrypt_payload(&self.cipher, buf);
         Ok(HorcrustMsgResponse::decode(buf.as_slice())?)
     }
@@ -65,14 +64,13 @@ impl ConnectionHandler<HorcrustMsgResponse, HorcrustMsgRequest> for TcpConnectio
         self.socket
             .write_all(encrypt_payload(&self.cipher, buf).as_slice())
             .unwrap();
-        self.socket.shutdown(Shutdown::Write);
+        self.socket.shutdown(Shutdown::Write)?;
         Ok(())
     }
 
     fn receive(&mut self) -> Result<HorcrustMsgRequest> {
         let mut buf = Vec::new();
         self.socket.read_to_end(&mut buf).unwrap();
-        self.socket.shutdown(Shutdown::Read)?;
         let buf = decrypt_payload(&self.cipher, buf);
         Ok(HorcrustMsgRequest::decode(buf.as_slice())?)
     }

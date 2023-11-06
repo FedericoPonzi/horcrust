@@ -1,3 +1,4 @@
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 use env_logger::Env;
 use horcrust::horcrust_msg_response::Response;
@@ -6,7 +7,7 @@ use horcrust::{
     HorcrustMsgResponse, HorcrustSecret, HorcrustShare, HorcrustStoreKey, Result, SecretSharing,
     TcpConnectionHandler,
 };
-use log::info;
+use log::{debug, info};
 
 /// Create shares out of your secret and stores them to distributed services. Allows you
 /// to safely recover your secret from the shares on a later moment.
@@ -41,7 +42,7 @@ fn main() {
     }
     info!("Hello!");
     dbg!(&cli);
-    let additive_sharing = horcrust::AdditiveSecretSharing::new();
+    let additive_sharing = horcrust::AdditiveSecretSharing::default();
     let shares_len = cli.servers.len();
     match cli.subcommands {
         Command::RetrieveSecret { key } => {
@@ -103,8 +104,10 @@ fn put_share(key: HorcrustStoreKey, share: HorcrustShare, server: String) -> Res
     let socket = std::net::TcpStream::connect(&server).unwrap();
     let mut handler = TcpConnectionHandler::new(socket);
     handler.send(req)?;
-
-    let received: HorcrustMsgResponse = handler.receive().unwrap();
+    debug!("fetching server response: ");
+    let received: HorcrustMsgResponse = handler
+        .receive()
+        .context(format!("failed handler receive with server: {server}"))?;
 
     match received.response.unwrap() {
         Response::Error(HorcrustMsgError {

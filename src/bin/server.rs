@@ -43,7 +43,7 @@ fn run(port: u16, servers: Vec<String>) -> Result<()> {
     let listener = TcpListener::bind(("0000000", port)).unwrap();
     info!("Listening on port {}", port);
     let db = Arc::new(Mutex::new(SharesDatabase::new()));
-    let secret_sharing = AdditiveSecretSharing::new();
+    let secret_sharing = AdditiveSecretSharing::default();
     spawn_refresher(servers, db.clone());
     for stream in listener.incoming() {
         let mut connection = TcpConnectionHandler::new(stream?);
@@ -98,7 +98,7 @@ pub fn refresher(servers: Vec<String>, db: Arc<Mutex<SharesDatabase>>) -> Result
         debug!("Waiting for {} seconds", time_to_wait);
         std::thread::sleep(std::time::Duration::from_secs(time_to_wait));
         debug!("Starting refreshing");
-        let refreshers = AdditiveSecretSharing::new().generate_refreshers(servers.len());
+        let refreshers = AdditiveSecretSharing::default().generate_refreshers(servers.len());
         let db_lock = db.lock().unwrap();
         let stale_keys = db_lock.stale_keys();
         drop(db_lock);
@@ -108,7 +108,7 @@ pub fn refresher(servers: Vec<String>, db: Arc<Mutex<SharesDatabase>>) -> Result
             continue;
         }
         for (server, r) in servers.iter().zip(refreshers) {
-            let socket = std::net::TcpStream::connect(&server).unwrap();
+            let socket = std::net::TcpStream::connect(server).unwrap();
             let mut handler = TcpConnectionHandler::new(socket);
             let request = msg_refresh_share_request(stale_keys.clone(), r);
             handler.send(request)?;

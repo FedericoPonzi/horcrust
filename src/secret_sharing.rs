@@ -11,15 +11,15 @@ pub trait SecretSharing {
 }
 /// This simple implementation assumes that the original secret is always less than q.
 const Q: u64 = 431;
+
 pub struct AdditiveSecretSharing {
     q: u64,
 }
-impl AdditiveSecretSharing {
-    pub fn new() -> AdditiveSecretSharing {
-        AdditiveSecretSharing { q: Q }
+impl Default for AdditiveSecretSharing {
+    fn default() -> Self {
+        Self { q: Q }
     }
 }
-
 impl SecretSharing for AdditiveSecretSharing {
     fn split(&self, shares: usize, secret: HorcrustSecret) -> Vec<HorcrustShare> {
         let mut rng = rand::thread_rng();
@@ -34,8 +34,9 @@ impl SecretSharing for AdditiveSecretSharing {
         // Calculate the last share to make the sum equal to the secret
         let last = secret as i64 - ret.iter().sum::<u64>() as i64;
         ret.push(last.rem_euclid(self.q as i64) as HorcrustShare);
-        ret.into()
+        ret
     }
+
     fn combine(&self, shares: Vec<HorcrustShare>) -> HorcrustSecret {
         // returns sum(shares) % Q
         shares
@@ -71,7 +72,7 @@ mod test {
     use super::*;
     #[test]
     fn test_additive_secret_sharing() {
-        let secret_sharing = AdditiveSecretSharing::new();
+        let secret_sharing = AdditiveSecretSharing::default();
         let shares = secret_sharing.split(3, 10);
         let combined_secret = secret_sharing.combine(shares);
         assert_eq!(combined_secret, 10);

@@ -1,8 +1,6 @@
-use crate::{HorcrustShare, HorcrustStoreKey};
+use crate::{HorcrustShare, HorcrustStoreKey, REFRESH_THRESHOLD};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
-
-const REFRESH_THRESHOLD: Duration = Duration::from_millis(5000);
+use std::time::Instant;
 
 #[derive(Default)]
 pub struct SharesDatabase {
@@ -57,7 +55,7 @@ mod tests {
 
     #[test]
     fn test_database() {
-        let secret_sharing = AdditiveSecretSharing::new();
+        let secret_sharing = AdditiveSecretSharing::default();
         let mut db = SharesDatabase::new();
         let key = 0u32;
         let share = 1;
