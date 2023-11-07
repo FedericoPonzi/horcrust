@@ -36,14 +36,16 @@ fn main() {
     // setup env_logger
     env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
 
-    let cli = CliArgs::parse();
+    let mut cli = CliArgs::parse();
     if cli.servers.len() < 2 {
         panic!("Please provide at least 2 servers");
     }
-    info!("Hello!");
+    // used to ease concurrency issues with the refresher thread.
+    cli.servers.sort();
     dbg!(&cli);
     let additive_sharing = horcrust::AdditiveSecretSharing::default();
     let shares_len = cli.servers.len();
+
     match cli.subcommands {
         Command::RetrieveSecret { key } => {
             info!(
@@ -78,7 +80,7 @@ fn main() {
 // retrieves a secret from a single server.
 fn reterieve_secret(key: HorcrustStoreKey, server: String) -> Result<HorcrustSecret> {
     let socket = std::net::TcpStream::connect(&server)?;
-    let mut handler = TcpConnectionHandler::new(socket);
+    let mut handler = TcpConnectionHandler::new(socket)?;
     let request = msg_retrieve_secret_request(key);
     handler.send(request)?;
     let received: HorcrustMsgResponse = handler.receive()?;
@@ -102,7 +104,7 @@ fn reterieve_secret(key: HorcrustStoreKey, server: String) -> Result<HorcrustSec
 fn put_share(key: HorcrustStoreKey, share: HorcrustShare, server: String) -> Result<()> {
     let req = msg_put_share_request(key, share);
     let socket = std::net::TcpStream::connect(&server)?;
-    let mut handler = TcpConnectionHandler::new(socket);
+    let mut handler = TcpConnectionHandler::new(socket)?;
     handler.send(req)?;
     debug!("fetching server response: ");
     let received: HorcrustMsgResponse = handler

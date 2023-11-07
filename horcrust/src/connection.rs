@@ -5,10 +5,10 @@ use aes_gcm::{
     Key, // Or `Aes128Gcm`
     Nonce,
 };
-use anyhow::Context;
 use prost::Message;
 use std::io::{Read, Write};
 use std::net::Shutdown;
+use std::time::Duration;
 
 pub trait ConnectionHandler<Req, Res> {
     fn send(&mut self, message: Req) -> Result<()>;
@@ -20,13 +20,14 @@ pub struct TcpConnectionHandler {
     cipher: Aes256Gcm,
 }
 impl TcpConnectionHandler {
-    pub fn new(socket: std::net::TcpStream) -> Self {
+    pub fn new(socket: std::net::TcpStream) -> Result<Self> {
         // TODO super secret key
         let key: &[u8; 32] = &[42; 32];
         let key: &Key<Aes256Gcm> = key.into();
         let cipher = Aes256Gcm::new(key);
-
-        Self { socket, cipher }
+        socket.set_read_timeout(Some(Duration::from_secs(1)))?;
+        socket.set_write_timeout(Some(Duration::from_secs(1)))?;
+        Ok(Self { socket, cipher })
     }
 }
 
@@ -100,13 +101,14 @@ mod tests {
     use crate::{msg_store_share_request, msg_success_response};
     use std::sync::mpsc;
     #[test]
-    fn test_encrypt_decrypt() {
+    fn test_encrypt_decrypt() -> anyhow::Result<()> {
         let key = Aes256Gcm::generate_key(OsRng);
         let cipher = Aes256Gcm::new(&key);
         let pt_payload = b"Hello World!";
         let encrypted_payload = encrypt_payload(&cipher, pt_payload.to_vec())?;
         let decrypted_payload = decrypt_payload(&cipher, encrypted_payload)?;
         assert_eq!(pt_payload, decrypted_payload.as_slice());
+        Ok(())
     }
 
     #[test]
@@ -119,14 +121,14 @@ mod tests {
             let port = listener.local_addr().unwrap().port();
             sender.send(port).expect("Failed to send port");
             let (socket, _) = listener.accept().unwrap();
-            let mut handler = TcpConnectionHandler::new(socket);
+            let mut handler = TcpConnectionHandler::new(socket).unwrap();
             let request = handler.receive().unwrap();
             assert_eq!(REQUEST, request);
             handler.send(RESPONSE).unwrap();
         });
         let port = receiver.recv()?;
         let socket = std::net::TcpStream::connect(format!("127.0.0.1:{}", port))?;
-        let mut handler = TcpConnectionHandler::new(socket);
+        let mut handler = TcpConnectionHandler::new(socket)?;
         let request = msg_store_share_request(1234, 1234);
         handler.send(request)?;
         assert_eq!(msg_success_response(), handler.receive()?);

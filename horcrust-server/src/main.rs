@@ -47,21 +47,25 @@ fn run(port: u16, servers: Vec<String>) -> Result<()> {
     let secret_sharing = AdditiveSecretSharing::default();
     spawn_refresher(servers, db.clone());
     for stream in listener.incoming() {
-        let mut connection = TcpConnectionHandler::new(stream?);
+        let mut connection = TcpConnectionHandler::new(stream?)?;
         let received: HorcrustMsgRequest = connection.receive()?;
-        debug!("Received request: {:?}", received);
-        match received.request? {
+        debug!("Received request.");
+        match received.request.unwrap() {
             horcrust_msg_request::Request::PutShare(put_share) => {
                 info!("Received put share request: {:?}", put_share);
                 // this overwrites whatever was there before
-                let mut db_lock = db.lock()?;
-                db_lock.insert(put_share.key, put_share.share);
-                let response = msg_success_response();
+                let mut db_lock = db.lock().unwrap();
+                let response = if db_lock.get(put_share.key).is_some() {
+                    msg_error_response("Key already exists.")
+                } else {
+                    db_lock.insert(put_share.key, put_share.share);
+                    msg_success_response()
+                };
                 connection.send(response)?;
             }
             horcrust_msg_request::Request::GetShare(get_share) => {
                 info!("Received get share request: {:?}", get_share);
-                let db_lock = db.lock()?;
+                let db_lock = db.lock().unwrap();
                 let share_opt = db_lock.get(get_share.key);
                 if let Some(share) = share_opt {
                     let response = msg_share_response(share);
@@ -75,9 +79,9 @@ fn run(port: u16, servers: Vec<String>) -> Result<()> {
             horcrust_msg_request::Request::Refresh(refresh) => {
                 info!("Received refresh request: {:?}", refresh);
                 let r = refresh.random;
-                let mut db_lock = db.lock()?;
+                let mut db_lock = db.lock().unwrap();
                 for key in refresh.key {
-                    db_lock.modify(key, |v| secret_sharing.refresh_share(r, v));
+                    db_lock.modify(key, |v| secret_sharing.refresh_share(r, v))?;
                 }
                 let response = msg_success_response();
                 connection.send(response)?;
@@ -90,30 +94,41 @@ fn run(port: u16, servers: Vec<String>) -> Result<()> {
 pub fn spawn_refresher(servers: Vec<String>, db: Arc<Mutex<SharesDatabase>>) {
     std::thread::spawn(move || refresher(servers, db));
 }
-pub fn refresher(servers: Vec<String>, db: Arc<Mutex<SharesDatabase>>) -> Result<()> {
+/// debug logs commented out to avoid verbosity on the output.
+pub fn refresher(mut servers: Vec<String>, db: Arc<Mutex<SharesDatabase>>) -> Result<()> {
+    // in this way, different refresher processes will try to connect to the first node first.
+    // the first node that is able to connect will succeed in starting the refresh process.
+    servers.sort();
     info!("Spawned refresher thread.");
     loop {
         // wait at least 2 seconds + between 1 and 10 seconds
-        let time_to_wait = 2 + (random::<f32>() * 10.0) as u64;
-        debug!("Waiting for {} seconds", time_to_wait);
-        std::thread::sleep(std::time::Duration::from_secs(time_to_wait));
-        debug!("Starting refreshing");
+        let time_to_wait = 2 + (random::<f32>() * 50.0) as u64;
+        //debug!("Refresher: Waiting for {} seconds", time_to_wait);
+        std::thread::sleep(std::time::Duration::from_millis(time_to_wait));
+        //debug!("Refresher: Starting refreshing");
         let refreshers = AdditiveSecretSharing::default().generate_refreshers(servers.len());
-        let db_lock = db.lock()?;
+        let db_lock = db.lock().unwrap();
         let stale_keys = db_lock.stale_keys();
         drop(db_lock);
         // all good
         if stale_keys.is_empty() {
-            debug!("No stale keys to refresh.");
+            //debug!("No stale keys to refresh.");
             continue;
         }
-        for (server, r) in servers.iter().zip(refreshers) {
+        let mut connection = vec![];
+        for server in servers.iter() {
             let socket = std::net::TcpStream::connect(server)?;
-            let mut handler = TcpConnectionHandler::new(socket);
+            let handler = TcpConnectionHandler::new(socket)?;
+            connection.push(handler);
+        }
+
+        // after we acquired a "lock" on all servers, start refreshing.
+        for ((mut handler, r), server) in connection.into_iter().zip(refreshers).zip(servers.iter())
+        {
             let request = msg_refresh_share_request(stale_keys.clone(), r);
             handler.send(request)?;
             let response: HorcrustMsgResponse = handler.receive()?;
-            match response.response.? {
+            match response.response.unwrap() {
                 horcrust_msg_response::Response::Error(HorcrustMsgError {
                     error,
                     error_string,

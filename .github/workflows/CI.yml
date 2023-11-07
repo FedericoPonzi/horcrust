@@ -1,4 +1,5 @@
 name: CI
+# todo: add docker builds + test them.
 
 on:
   pull_request:
