@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 fn main() {
     prost_build::Config::new()
         .out_dir("src")
