@@ -5,6 +5,7 @@ use aes_gcm::{
     Key, // Or `Aes128Gcm`
     Nonce,
 };
+use anyhow::Context;
 use prost::Message;
 use std::io::{Read, Write};
 use std::net::Shutdown;
@@ -34,15 +35,15 @@ impl TcpConnectionHandler {
 impl ConnectionHandler<HorcrustMsgRequest, HorcrustMsgResponse> for TcpConnectionHandler {
     fn send(&mut self, message: HorcrustMsgRequest) -> Result<()> {
         let mut buf = Vec::new();
-        message.encode(&mut buf).unwrap();
+        message.encode(&mut buf)?;
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng); // 96-bits; unique per message
-        let encrypted_payload = self.cipher.encrypt(&nonce, buf.as_ref()).unwrap();
+        let encrypted_payload = self.cipher.encrypt(&nonce, buf.as_ref())?;
         let nonce = nonce.to_vec();
         let message = RawMessage {
             nonce,
             encrypted_payload,
         };
-        message.encode(&mut buf).unwrap();
+        message.encode(&mut buf)?;
         self.socket.write_all(&buf)?;
         self.socket.shutdown(Shutdown::Write)?;
         Ok(())
@@ -51,7 +52,7 @@ impl ConnectionHandler<HorcrustMsgRequest, HorcrustMsgResponse> for TcpConnectio
     fn receive(&mut self) -> Result<HorcrustMsgResponse> {
         let mut buf = Vec::new();
         self.socket.read_to_end(&mut buf)?;
-        let buf = decrypt_payload(&self.cipher, buf);
+        let buf = decrypt_payload(&self.cipher, buf)?;
         Ok(HorcrustMsgResponse::decode(buf.as_slice())?)
     }
 }
@@ -60,32 +61,29 @@ impl ConnectionHandler<HorcrustMsgRequest, HorcrustMsgResponse> for TcpConnectio
 impl ConnectionHandler<HorcrustMsgResponse, HorcrustMsgRequest> for TcpConnectionHandler {
     fn send(&mut self, message: HorcrustMsgResponse) -> Result<()> {
         let mut buf = Vec::new();
-        message.encode(&mut buf).unwrap();
+        message.encode(&mut buf)?;
         self.socket
-            .write_all(encrypt_payload(&self.cipher, buf).as_slice())
-            .unwrap();
+            .write_all(encrypt_payload(&self.cipher, buf)?.as_slice())?;
         self.socket.shutdown(Shutdown::Write)?;
         Ok(())
     }
 
     fn receive(&mut self) -> Result<HorcrustMsgRequest> {
         let mut buf = Vec::new();
-        self.socket.read_to_end(&mut buf).unwrap();
-        let buf = decrypt_payload(&self.cipher, buf);
+        self.socket.read_to_end(&mut buf)?;
+        let buf = decrypt_payload(&self.cipher, buf)?;
         Ok(HorcrustMsgRequest::decode(buf.as_slice())?)
     }
 }
 
-fn decrypt_payload(cipher: &Aes256Gcm, encrypted_payload: Vec<u8>) -> Vec<u8> {
+fn decrypt_payload(cipher: &Aes256Gcm, encrypted_payload: Vec<u8>) -> Result<Vec<u8>> {
     let message = RawMessage::decode(encrypted_payload.as_slice()).unwrap();
     let nonce = Nonce::from_slice(message.nonce.as_slice());
-    cipher
-        .decrypt(nonce, message.encrypted_payload.as_slice())
-        .unwrap()
+    Ok(cipher.decrypt(nonce, message.encrypted_payload.as_slice())?)
 }
-fn encrypt_payload(cipher: &Aes256Gcm, pt_payload: Vec<u8>) -> Vec<u8> {
+fn encrypt_payload(cipher: &Aes256Gcm, pt_payload: Vec<u8>) -> Result<Vec<u8>> {
     let nonce = Aes256Gcm::generate_nonce(&mut OsRng); // 96-bits; unique per message
-    let encrypted_payload = cipher.encrypt(&nonce, pt_payload.as_ref()).unwrap();
+    let encrypted_payload = cipher.encrypt(&nonce, pt_payload.as_ref())?;
     let nonce = nonce.to_vec();
     let message = RawMessage {
         nonce,
@@ -93,7 +91,7 @@ fn encrypt_payload(cipher: &Aes256Gcm, pt_payload: Vec<u8>) -> Vec<u8> {
     };
     let mut buf = Vec::new();
     message.encode(&mut buf).unwrap();
-    buf
+    Ok(buf)
 }
 
 #[cfg(test)]
@@ -106,13 +104,13 @@ mod tests {
         let key = Aes256Gcm::generate_key(OsRng);
         let cipher = Aes256Gcm::new(&key);
         let pt_payload = b"Hello World!";
-        let encrypted_payload = encrypt_payload(&cipher, pt_payload.to_vec());
-        let decrypted_payload = decrypt_payload(&cipher, encrypted_payload);
+        let encrypted_payload = encrypt_payload(&cipher, pt_payload.to_vec())?;
+        let decrypted_payload = decrypt_payload(&cipher, encrypted_payload)?;
         assert_eq!(pt_payload, decrypted_payload.as_slice());
     }
 
     #[test]
-    fn test_tcp_encrypted_channel() {
+    fn test_tcp_encrypted_channel() -> anyhow::Result<()> {
         let (sender, receiver) = mpsc::channel();
         const REQUEST: HorcrustMsgRequest = msg_store_share_request(1234, 1234);
         const RESPONSE: HorcrustMsgResponse = msg_success_response();
@@ -126,12 +124,13 @@ mod tests {
             assert_eq!(REQUEST, request);
             handler.send(RESPONSE).unwrap();
         });
-        let port = receiver.recv().unwrap();
-        let socket = std::net::TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
+        let port = receiver.recv()?;
+        let socket = std::net::TcpStream::connect(format!("127.0.0.1:{}", port))?;
         let mut handler = TcpConnectionHandler::new(socket);
         let request = msg_store_share_request(1234, 1234);
-        handler.send(request).unwrap();
-        assert_eq!(msg_success_response(), handler.receive().unwrap());
+        handler.send(request)?;
+        assert_eq!(msg_success_response(), handler.receive()?);
         server_thread.join().unwrap();
+        Ok(())
     }
 }

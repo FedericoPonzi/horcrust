@@ -15,5 +15,5 @@ prost = "^0.11.9"
 log = "~0.4"
 rand = "~0.8"
 hex = "0.4.2"
-aes-gcm = "0.10.2"
+aes-gcm = {version = "0.10.2", features = ["std"]}
 

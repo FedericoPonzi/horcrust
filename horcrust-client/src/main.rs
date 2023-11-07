@@ -77,11 +77,11 @@ fn main() {
 
 // retrieves a secret from a single server.
 fn reterieve_secret(key: HorcrustStoreKey, server: String) -> Result<HorcrustSecret> {
-    let socket = std::net::TcpStream::connect(&server).unwrap();
+    let socket = std::net::TcpStream::connect(&server)?;
     let mut handler = TcpConnectionHandler::new(socket);
     let request = msg_retrieve_secret_request(key);
     handler.send(request)?;
-    let received: HorcrustMsgResponse = handler.receive().unwrap();
+    let received: HorcrustMsgResponse = handler.receive()?;
     match received.response.unwrap() {
         Response::Error(HorcrustMsgError {
             error,
@@ -101,7 +101,7 @@ fn reterieve_secret(key: HorcrustStoreKey, server: String) -> Result<HorcrustSec
 
 fn put_share(key: HorcrustStoreKey, share: HorcrustShare, server: String) -> Result<()> {
     let req = msg_put_share_request(key, share);
-    let socket = std::net::TcpStream::connect(&server).unwrap();
+    let socket = std::net::TcpStream::connect(&server)?;
     let mut handler = TcpConnectionHandler::new(socket);
     handler.send(req)?;
     debug!("fetching server response: ");

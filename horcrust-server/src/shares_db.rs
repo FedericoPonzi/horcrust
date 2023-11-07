@@ -34,17 +34,20 @@ impl SharesDatabase {
         // just to keep things easy, this get returns a copy of the value. Usually it should return a reference to it.
         self.shares.get(&key.into()).cloned()
     }
-    pub fn modify<F, K: Into<HorcrustStoreKey> + Copy>(&mut self, key: K, f: F)
+    pub fn modify<F, K: Into<HorcrustStoreKey> + Copy>(
+        &mut self,
+        key: K,
+        f: F,
+    ) -> horcrust::Result<()>
     where
         F: Fn(HorcrustShare) -> HorcrustShare,
     {
-        let share = self.shares.get_mut(&key.into());
-        if share.is_none() {
-            return;
+        if let Some(share) = self.shares.get_mut(&key.into()) {
+            *share = f(*share);
+            // safe unwrap because shares and shares_refresh have the same keys
+            *self.shares_refresh.get_mut(&key.into()).unwrap() = Instant::now();
         }
-        let share = share.unwrap();
-        *share = f(*share);
-        *self.shares_refresh.get_mut(&key.into()).unwrap() = Instant::now();
+        Ok(())
     }
 }
 
@@ -63,7 +66,7 @@ mod tests {
         db.insert(key, share);
         assert_eq!(db.get(key).unwrap(), share);
 
-        db.modify(key, |share| share + r);
+        db.modify(key, |share| share + r).unwrap();
         assert_eq!(db.get(key).unwrap(), share + r);
     }
 }
