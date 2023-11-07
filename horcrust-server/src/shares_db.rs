@@ -1,4 +1,4 @@
-use crate::{HorcrustShare, HorcrustStoreKey, REFRESH_THRESHOLD};
+use horcrust::{HorcrustShare, HorcrustStoreKey, REFRESH_THRESHOLD};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -51,7 +51,7 @@ impl SharesDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::AdditiveSecretSharing;
+    use horcrust::AdditiveSecretSharing;
 
     #[test]
     fn test_database() {

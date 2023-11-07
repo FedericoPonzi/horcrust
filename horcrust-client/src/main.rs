@@ -9,7 +9,7 @@ use horcrust::{
 };
 use log::{debug, info};
 
-/// Create shares out of your secret and stores them to distributed services. Allows you
+/// Create shares out of your secret and stores them to distributed stores. Allows you
 /// to safely recover your secret from the shares on a later moment.
 #[derive(Parser, Clone, Debug)]
 #[command(author, version, about, long_about = None)]

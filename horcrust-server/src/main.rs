@@ -9,9 +9,10 @@ use rand::random;
 use horcrust::{
     horcrust_msg_request, horcrust_msg_response, msg_error_response, msg_refresh_share_request,
     msg_share_response, msg_success_response, AdditiveSecretSharing, ConnectionHandler,
-    HorcrustMsgError, HorcrustMsgRequest, HorcrustMsgResponse, Result, TcpConnectionHandler,
+    HorcrustMsgError, HorcrustMsgRequest, HorcrustMsgResponse, Result, SecretSharing,
+    TcpConnectionHandler,
 };
-use horcrust::{SecretSharing, SharesDatabase};
+use horcrust_server::SharesDatabase;
 
 /// Create shares out of your secret and stores them to distributed services. Allows you
 /// to safely recover your secret from the shares on a later moment.
@@ -61,14 +62,13 @@ fn run(port: u16, servers: Vec<String>) -> Result<()> {
             horcrust_msg_request::Request::GetShare(get_share) => {
                 info!("Received get share request: {:?}", get_share);
                 let db_lock = db.lock().unwrap();
-                let share = db_lock.get(get_share.key);
-                if share.is_none() {
-                    let response =
-                        msg_error_response("Key not found. Use store-key to store a key first.");
+                let share_opt = db_lock.get(get_share.key);
+                if let Some(share) = share_opt {
+                    let response = msg_share_response(share);
                     connection.send(response)?;
                 } else {
-                    let share = share.unwrap();
-                    let response = msg_share_response(share);
+                    let response =
+                        msg_error_response("Key not found. Use store-key to store a key first.");
                     connection.send(response)?;
                 }
             }

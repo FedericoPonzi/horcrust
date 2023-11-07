@@ -4,7 +4,7 @@ services:
   server1:
     build: .
     ports:
-      - "8001:8080"
+      - "9091:8080"
     environment:
       - "RUST_BACKTRACE=1"
     networks:
@@ -14,12 +14,12 @@ services:
   server2:
     build: .
     ports:
-      - "8002:8080"
+      - "9092:8080"
     environment:
       - "RUST_BACKTRACE=1"
     networks:
       - server-network
-    command: "-s server1 -s server2"
+    command: "-s server1:8080 -s server2:8080"
 
 networks:
   server-network:
