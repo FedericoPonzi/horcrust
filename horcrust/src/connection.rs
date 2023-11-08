@@ -5,7 +5,7 @@ use aes_gcm::{
     Key, // Or `Aes128Gcm`
     Nonce,
 };
-use num_bigint::{BigUint, ToBigUint};
+use num_bigint::BigUint;
 use num_traits::ToPrimitive;
 use prost::Message;
 use rand::random;
@@ -41,16 +41,13 @@ impl TcpConnectionHandler {
         let public_key_b = self.handshake_receive_pk()?;
         let session_key = generate_session_key(private_key, public_key_b, P);
         let mut key = vec![42; 32];
-        // copy session_key key[0..8], [8..16] ... [24..32]
-        // should do some key expansion instead.
-        let mut i = 0;
+        // TODO: should do some key expansion instead.
         let session_key = session_key.to_le_bytes();
         for byte in 0..32 {
-            key[i] = session_key[byte % 8];
-            i += 1;
+            key[byte] = session_key[byte % 8];
         }
         let key = Key::<Aes256Gcm>::from_slice(key.as_slice());
-        self.cipher = Aes256Gcm::new(&key);
+        self.cipher = Aes256Gcm::new(key);
         Ok(())
     }
     fn handshake_receive_pk(&mut self) -> Result<u64> {
@@ -124,19 +121,18 @@ fn encrypt_payload(cipher: &Aes256Gcm, pt_payload: Vec<u8>) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
-// TODO: larger P.
+// TODO: bigger P.
 const P: u64 = 18446744073709551557;
 const G: u64 = 2;
 
 pub fn generate_pk(p: u64, g: u64) -> (u64, u64) {
-    let a: u64 = random::<u64>();
-    let A = modpow(g, a, p);
-    (A, a)
+    let priv_a: u64 = random::<u64>();
+    let pub_a = modpow(g, priv_a, p);
+    (pub_a, priv_a)
 }
 pub fn generate_session_key(prvkey_a: u64, pk_b: u64, p: u64) -> u64 {
     // s = (B**a) % p.
-    let s = modpow(pk_b, prvkey_a, p);
-    s
+    modpow(pk_b, prvkey_a, p)
 }
 
 pub fn modpow(base: u64, exp: u64, n: u64) -> u64 {
