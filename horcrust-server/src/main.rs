@@ -48,43 +48,43 @@ fn run(port: u16, servers: Vec<String>) -> Result<()> {
     spawn_refresher(servers, db.clone());
     for stream in listener.incoming() {
         let mut connection = TcpConnectionHandler::new(stream?)?;
-        let received: HorcrustMsgRequest = connection.receive()?;
-        debug!("Received request.");
-        match received.request.unwrap() {
-            horcrust_msg_request::Request::PutShare(put_share) => {
-                info!("Received put share request: {:?}", put_share);
-                // this overwrites whatever was there before
-                let mut db_lock = db.lock().unwrap();
-                let response = if db_lock.get(put_share.key).is_some() {
-                    msg_error_response("Key already exists.")
-                } else {
+        // avoid crashing if client sends garbage.
+        let received_res: Result<HorcrustMsgRequest> = connection.receive();
+        if let Ok(received) = received_res {
+            debug!("Received valid request.");
+            match received.request.unwrap() {
+                horcrust_msg_request::Request::PutShare(put_share) => {
+                    info!("Received put share request: {:?}", put_share);
+                    // this overwrites whatever was there before
+                    let mut db_lock = db.lock().unwrap();
                     db_lock.insert(put_share.key, put_share.share);
-                    msg_success_response()
-                };
-                connection.send(response)?;
-            }
-            horcrust_msg_request::Request::GetShare(get_share) => {
-                info!("Received get share request: {:?}", get_share);
-                let db_lock = db.lock().unwrap();
-                let share_opt = db_lock.get(get_share.key);
-                if let Some(share) = share_opt {
-                    let response = msg_share_response(share);
-                    connection.send(response)?;
-                } else {
-                    let response =
-                        msg_error_response("Key not found. Use store-key to store a key first.");
+                    let response = msg_success_response();
                     connection.send(response)?;
                 }
-            }
-            horcrust_msg_request::Request::Refresh(refresh) => {
-                info!("Received refresh request: {:?}", refresh);
-                let r = refresh.random;
-                let mut db_lock = db.lock().unwrap();
-                for key in refresh.key {
-                    db_lock.modify(key, |v| secret_sharing.refresh_share(r, v))?;
+                horcrust_msg_request::Request::GetShare(get_share) => {
+                    info!("Received get share request: {:?}", get_share);
+                    let db_lock = db.lock().unwrap();
+                    let share_opt = db_lock.get(get_share.key);
+                    if let Some(share) = share_opt {
+                        let response = msg_share_response(share);
+                        connection.send(response)?;
+                    } else {
+                        let response = msg_error_response(
+                            "Key not found. Use store-key to store a key first.",
+                        );
+                        connection.send(response)?;
+                    }
                 }
-                let response = msg_success_response();
-                connection.send(response)?;
+                horcrust_msg_request::Request::Refresh(refresh) => {
+                    info!("Received refresh request: {:?}", refresh);
+                    let r = refresh.random;
+                    let mut db_lock = db.lock().unwrap();
+                    for key in refresh.key {
+                        db_lock.modify(key, |v| secret_sharing.refresh_share(r, v))?;
+                    }
+                    let response = msg_success_response();
+                    connection.send(response)?;
+                }
             }
         }
     }

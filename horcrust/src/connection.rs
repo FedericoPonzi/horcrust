@@ -5,7 +5,10 @@ use aes_gcm::{
     Key, // Or `Aes128Gcm`
     Nonce,
 };
+use num_bigint::{BigUint, ToBigUint};
+use num_traits::ToPrimitive;
 use prost::Message;
+use rand::random;
 use std::io::{Read, Write};
 use std::net::Shutdown;
 use std::time::Duration;
@@ -27,7 +30,33 @@ impl TcpConnectionHandler {
         let cipher = Aes256Gcm::new(key);
         socket.set_read_timeout(Some(Duration::from_secs(1)))?;
         socket.set_write_timeout(Some(Duration::from_secs(1)))?;
-        Ok(Self { socket, cipher })
+        let mut ret = Self { socket, cipher };
+        // comment this to enable replay attacks :D
+        ret.handshake()?;
+        Ok(ret)
+    }
+    pub fn handshake(&mut self) -> Result<()> {
+        let (public_key, private_key) = generate_pk(P, G);
+        self.socket.write_all(&public_key.to_le_bytes())?;
+        let public_key_b = self.handshake_receive_pk()?;
+        let session_key = generate_session_key(private_key, public_key_b, P);
+        let mut key = vec![42; 32];
+        // copy session_key key[0..8], [8..16] ... [24..32]
+        // should do some key expansion instead.
+        let mut i = 0;
+        let session_key = session_key.to_le_bytes();
+        for byte in 0..32 {
+            key[i] = session_key[byte % 8];
+            i += 1;
+        }
+        let key = Key::<Aes256Gcm>::from_slice(key.as_slice());
+        self.cipher = Aes256Gcm::new(&key);
+        Ok(())
+    }
+    fn handshake_receive_pk(&mut self) -> Result<u64> {
+        let mut pk = [0; 8];
+        self.socket.read_exact(&mut pk)?;
+        Ok(u64::from_le_bytes(pk))
     }
 }
 
@@ -78,7 +107,7 @@ impl ConnectionHandler<HorcrustMsgResponse, HorcrustMsgRequest> for TcpConnectio
 }
 
 fn decrypt_payload(cipher: &Aes256Gcm, encrypted_payload: Vec<u8>) -> Result<Vec<u8>> {
-    let message = RawMessage::decode(encrypted_payload.as_slice()).unwrap();
+    let message = RawMessage::decode(encrypted_payload.as_slice())?;
     let nonce = Nonce::from_slice(message.nonce.as_slice());
     Ok(cipher.decrypt(nonce, message.encrypted_payload.as_slice())?)
 }
@@ -91,10 +120,31 @@ fn encrypt_payload(cipher: &Aes256Gcm, pt_payload: Vec<u8>) -> Result<Vec<u8>> {
         encrypted_payload,
     };
     let mut buf = Vec::new();
-    message.encode(&mut buf).unwrap();
+    message.encode(&mut buf)?;
     Ok(buf)
 }
 
+// TODO: larger P.
+const P: u64 = 18446744073709551557;
+const G: u64 = 2;
+
+pub fn generate_pk(p: u64, g: u64) -> (u64, u64) {
+    let a: u64 = random::<u64>();
+    let A = modpow(g, a, p);
+    (A, a)
+}
+pub fn generate_session_key(prvkey_a: u64, pk_b: u64, p: u64) -> u64 {
+    // s = (B**a) % p.
+    let s = modpow(pk_b, prvkey_a, p);
+    s
+}
+
+pub fn modpow(base: u64, exp: u64, n: u64) -> u64 {
+    let base: BigUint = base.into();
+    let exp = exp.into();
+    let n = n.into();
+    base.modpow(&exp, &n).to_u64().unwrap()
+}
 #[cfg(test)]
 mod tests {
     use super::*;
