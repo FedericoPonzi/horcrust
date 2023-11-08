@@ -1,5 +1,5 @@
 ## Horcrust
-Split your precious file in encrypted pieces. Recover it with a minimum required amount.
+Split your precious secret in shares and send them to remote servers. Easily recover your secret when you need it.
 
 
 ### Running the system
